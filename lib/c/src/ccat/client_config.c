@@ -17,12 +17,13 @@
  * limitations under the License.
  */
 #include "client_config.h"
+#include <stdlib.h>
 
 #include <lib/cat_clog.h>
 #include <lib/cat_ezxml.h>
 #include <lib/cat_anet.h>
 
-#include "message_aggregator.h"
+#include "aggregator.h"
 
 CatClientInnerConfig g_config;
 
@@ -32,7 +33,7 @@ extern int g_log_saveFlag;
 extern int g_log_file_with_time;
 extern int g_log_file_perDay;
 
-volatile int g_cat_enabledFlag = 0;
+volatile int g_cat_enabled = 0;
 
 void catChecktPtrWithName(void *ptr, char *ptrName) {
     if (ptr == NULL) {
@@ -42,7 +43,7 @@ void catChecktPtrWithName(void *ptr, char *ptrName) {
 }
 
 inline int isCatEnabled() {
-    return g_cat_enabledFlag;
+    return g_cat_enabled;
 }
 
 static ezxml_t getCatClientConfig(const char *filename) {
@@ -68,7 +69,15 @@ int parseCatClientConfig(ezxml_t f1) {
             }
 
             if (serverIndex == 0) {
+                const char * port;
+
                 g_config.serverHost = catsdsnew(ip);
+                
+                port = ezxml_attr(server, "http-port");
+                if (port && port[0] != '\0') {
+                    g_config.serverPort = atoi(port);
+                }
+                
             } else if (serverIndex >= g_config.serverNum) {
                 break;
             }
@@ -146,7 +155,13 @@ void initCatClientConfig(CatClientConfig *config) {
     g_config.logLevel = CLOG_ALL;
 
     g_config.configDir = catsdsnew("./");
-    g_config.dataDir = catsdsnew(DEFAULT_DATA_DIR);
+
+    // CAT_HOME
+    char *cathomevar;
+    cathomevar = catHome();
+    const char *dataDir = cathomevar;
+    printf("Using dataDir=%s\n", dataDir);
+    g_config.dataDir = catsdsnew(dataDir);
 
     g_config.indexFileName = catsdsnew("client.idx.h");
 
@@ -154,6 +169,7 @@ void initCatClientConfig(CatClientConfig *config) {
     g_config.enableHeartbeat = config->enableHeartbeat;
     g_config.enableSampling = config->enableSampling;
     g_config.enableMultiprocessing = config->enableMultiprocessing;
+    g_config.enableAutoInitialize = config->enableAutoInitialize;
 
     // logging configs
     if (!g_config.logFlag) {
@@ -186,3 +202,13 @@ void clearCatClientConfig() {
     catsdsfree(g_config.indexFileName);
 }
 
+
+char *catHome() {
+       // CAT_HOME
+    char *cathomevar;
+    cathomevar = getenv("CAT_HOME");
+    if (cathomevar == NULL) {
+        cathomevar = DEFAULT_CAT_HOME;
+    }
+    return cathomevar;
+}
